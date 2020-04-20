@@ -55,30 +55,45 @@
 ;; Functions for generating vega JS specs for visualization
 (defn base-schema
   [options & {:as m}]
-  (merge {:$schema "https://vega.github.io/schema/vega/v5.json"
-          :autosize {:type "fit" :resize true :contains "padding"}
-          :width 800 :height 450}
-         options m))
+  (with-meta
+    (merge {:$schema "https://vega.github.io/schema/vega/v5.json"
+            :autosize {:type "fit" :resize true :contains "padding"}
+            :width 800 :height 450}
+           options m)
+    
+    {:p/render-as :p/vega}))
+
+(defn merge-with-meta [& data]
+  (let [metas (map meta data)
+        merged-meta (apply merge metas)]
+    (with-meta (apply merge data) merged-meta)))
+
+(comment
+  (meta (merge-with-meta
+         ^:R {:a 1 :b 2}
+         ^:r {:c 3 :d 4}))
+  )
+
 
 (defn axis
   [& {:keys [domain grid]
       :or {domain false grid true}
       :as m}]
-  (merge m {:domain domain :grid grid}))
+  (merge-with-meta m {:domain domain :grid grid}))
 
 (defn scale
   [& {:keys [nice round type zero]
       :or {nice true round true type "linear" zero true}
       :as m}]
-  (merge m {:nice nice :round round :type type :zero zero}))
+  (merge-with-meta m {:nice nice :round round :type type :zero zero}))
 
 (defn default-legends
   [vega-spec {:keys [label-key] :as options}]
-  (merge vega-spec
-         (when label-key
-           {:legends [{:type :symbol
-                       :fill "color"
-                       :orient (:legend-orient options "right")}]})))
+  (merge-with-meta vega-spec
+                   (when label-key
+                     {:legends [{:type :symbol
+                                 :fill "color"
+                                 :orient (:legend-orient options "right")}]})))
 
 
 (defn bgr->hex-string
@@ -154,6 +169,11 @@
                              :range {:scheme gradient-map}}])))
         (default-legends options))))
 
+(comment
+  (meta (scatterplot [{:a 1 :b 2} {:a 2 :b 3}] :a :b))
+;
+  )
+
 
 (defn histogram
   "Render a histograph to a vega datastructure"
@@ -184,27 +204,27 @@
                     (map bgr->hex-string))
         values (map (fn [v c] (assoc v :color c)) values colors)]
     (base-schema options
-     :axes [{:orient "bottom" :scale "xscale" :tickCount 5 :title label}
-            {:orient "left" :scale "yscale" :tickCount 5}]
-     :data [{:name "binned"
-             :values values}]
-     :marks [{:encode {:update
-                       {:fill {:field :color}
-                        :stroke {:value "#222"}
-                        :x {:field :left :scale "xscale" :offset {:value 0.5}}
-                        :x2 {:field :right :scale "xscale" :offset {:value 0.5}}
-                        :y {:field :count :scale "yscale" :offset {:value 0.5}}
-                        :y2 {:value 0 :scale "yscale" :offset {:value 0.5}}}}
-              :from {:data "binned"}
-              :type "rect"}]
-     :scales [(scale :domain [minimum maximum]
-                     :range "width"
-                     :name "xscale"
-                     :zero false
-                     :nice false)
-              (scale :domain {:data "binned" :field "count"}
-                     :range "height"
-                     :name "yscale")])))
+                 :axes [{:orient "bottom" :scale "xscale" :tickCount 5 :title label}
+                        {:orient "left" :scale "yscale" :tickCount 5}]
+                 :data [{:name "binned"
+                         :values values}]
+                 :marks [{:encode {:update
+                                   {:fill {:field :color}
+                                    :stroke {:value "#222"}
+                                    :x {:field :left :scale "xscale" :offset {:value 0.5}}
+                                    :x2 {:field :right :scale "xscale" :offset {:value 0.5}}
+                                    :y {:field :count :scale "yscale" :offset {:value 0.5}}
+                                    :y2 {:value 0 :scale "yscale" :offset {:value 0.5}}}}
+                          :from {:data "binned"}
+                          :type "rect"}]
+                 :scales [(scale :domain [minimum maximum]
+                                 :range "width"
+                                 :name "xscale"
+                                 :zero false
+                                 :nice false)
+                          (scale :domain {:data "binned" :field "count"}
+                                 :range "height"
+                                 :name "yscale")])))
 
 
 (defn- minmax
@@ -286,9 +306,7 @@
 
      (defn vega->svg-file
        [vega-spec filename]
-       (spit filename (vega->svg vega-spec))))
-
-   )
+       (spit filename (vega->svg vega-spec)))))
 
 
 (comment
@@ -323,10 +341,7 @@
     (defn desktop-view-vega
       [vega-spec filename]
       (vega->svg-file vega-spec filename)
-      (sh/sh "xdg-open" filename))
-
-
-     )
+      (sh/sh "xdg-open" filename)))
 
 
   (def example-scatterplot
@@ -392,5 +407,4 @@
         (->clipboard)))
 
   ;; Then, paste into: https://vega.github.io/editor
-
   )
